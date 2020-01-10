@@ -1,0 +1,149 @@
+
+
+import gevent
+from gevent import monkey, pool
+
+gevent.monkey.patch_all()
+import requests
+from lxml import etree
+import re
+import time
+import datetime
+from collections import Counter
+import pymysql
+import json
+import base64
+import redis
+import random
+
+
+
+
+def down_360(url):
+    headers = {
+        "Host": "www.so.com",
+        "Cookie": "QiHooGUID=984E57AF299409DA96CCB3F155417282.1576206984572; __guid=15484592.332589571324038900.1576206985249.9802; webp=1; stc_ls_sohome=RQzW2jYRKC!*TRXcM(WK; __huid=11DYDnhfeXTTiRI1QKJ3PZjB%2B%2B4w3tkxcA%2BYjfHDyAj1U%3D; dpr=1; screenw=1; gtHuid=1; opqopq=722c5aa05c4c31cf5555a9d3c190abf2.1576576836; count=23",
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36"
+    }
+    html = requests.get(url, headers=headers)
+    # html.encoding="utf-8"
+    # print(html.text)
+    return  etree.HTML(html.text)
+
+def down2_360(url):
+
+    headers={
+    "Referer":"https://www.so.com/s?q=%E7%96%AF%E7%8B%82%E7%9A%84%E5%A4%96%E6%98%9F%E4%BA%BA%E5%9C%A8%E7%BA%BF%E8%A7%82%E7%9C%8B&src=webcache",
+
+    "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/71.0.3578.80 Safari/537.36"
+    }
+    html=requests.get(url,headers=headers)
+    # html.encoding="gb2312"
+    # print(html.text)
+    # print(re.findall("b'(.*)'",base64.b64encode(html.text.encode("utf-8")))[0])
+    return  html.text
+
+
+    try:
+        # =======360===========
+        for j in range(10):
+            print("第%d页" % (j + 1))
+            url1 = "https://www.so.com/s?q={}&pn={}".format(key_word,
+                                                            j + 1)
+            nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            # url1="https://www.baidu.com/s?ie=utf-8&f=8&wd={}&si=xiaohongshu.com&ct=2097152&gpc=stf%3D1547368671%2C1547455071%7Cstftype%3D1"
+            html1 = down_360(url1)
+            for i in range(len(html1.xpath('//ul[@class="result"]/li'))):
+                #     # and html1.xpath('//div[@class="results"]/div[{}]/div[1]/@class'.format(i + 1))[0] == "strBox"
+                #     try:
+                if html1.xpath('//ul[@class="result"]/li[{}]//div[contains(@class,"res-rich")]'.format(i + 1)):
+                    #         try:
+                    titile1 = html1.xpath('//ul[@class="result"]/li[{}]/h3'.format(i + 1))[0]
+                    title = "[{}]".format(key_word)+" "+titile1.xpath('string(.)')
+                    content1 = \
+                    html1.xpath('//ul[@class="result"]/li[{}]//div[contains(@class,"res-rich")]'.format(i + 1))[0]
+                    #             # print(content1)
+                    content = content1.xpath('string(.)')
+                    if "https://www.so.com/link" not in \
+                            html1.xpath('//ul[@class="result"]/li[{}]/h3/a/@href'.format(i + 1))[0]:
+                        #             link1 = "https://www.sogou.com"+html1.xpath('//div[@class="results"]/div[{}]//h3/a/@href'.format(i + 1))[0]
+                        detil_url = html1.xpath('//ul[@class="result"]/li[{}]/h3/a/@href'.format(i + 1))[0]
+                    else:
+                        detil_url = html1.xpath('//ul[@class="result"]/li[{}]/h3/a/@data-url'.format(i + 1))[0]
+
+                    kuaizao_url = \
+                        html1.xpath(
+                            '//ul[@class="result"]/li[{}]//div[contains(@class,"res-rich")]//p[contains(@class,"res-linkinfo")]/a[1]/@href'.format(
+                                i + 1))[0]
+                    kuaizao_html = down2_360(kuaizao_url)
+                    print("360",title, content, detil_url, kuaizao_url)
+                    blacklist_nums = 0
+                    for blacklist_word in blacklist_words:
+                        if blacklist_word not in title:
+                            blacklist_nums += 1
+                    black_urls_nums = 0
+                    for black_url in black_urls:
+                        if black_url not in detil_url:
+                            black_urls_nums += 1
+                    if blacklist_nums == len(blacklist_words) and black_urls_nums == len(black_urls):
+                        url_judge = set_redis(detil_url)
+                        if url_judge == False:
+                            # mysql save
+                            hot = "insert , detil_url, "102", "1", nowTime, content,
+                                "0", nowTime, nowTime, str(base64.b64encode(kuaizao_html.encode("utf-8")), "utf-8"), 1,nowTime,keyword_id)
+                            save_mysql(hot)
+                        else:
+                            print("重复数据")
+                            pass
+                # except Exception as e:
+                #     print(e, "&&&&&")
+                #     pass
+                # try:
+                if html1.xpath('//ul[@class="result"]/li[{}]/p'.format(i + 1)):
+                    #         try:
+                    nowTime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    titile1 = html1.xpath('//ul[@class="result"]/li[{}]/h3'.format(i + 1))[0]
+                    title = "[{}]".format(key_word)+" "+titile1.xpath('string(.)')
+                    content1 = html1.xpath(
+                        '//ul[@class="result"]/li[{}]/p[contains(@class,"res-desc")]'.format(i + 1))[
+                        0]
+                    #             # print(content1)
+                    content = content1.xpath('string(.)')
+                    if "https://www.so.com/link" not in \
+                            html1.xpath('//ul[@class="result"]/li[{}]/h3/a/@href'.format(i + 1))[0]:
+                        #             link1 = "https://www.sogou.com"+html1.xpath('//div[@class="results"]/div[{}]//h3/a/@href'.format(i + 1))[0]
+                        detil_url = html1.xpath('//ul[@class="result"]/li[{}]/h3/a/@href'.format(i + 1))[0]
+                    else:
+                        link1 = html1.xpath('//ul[@class="result"]/li[{}]/h3/a/@href'.format(i + 1))[0]
+                        detil_url = \
+                            re.findall('replace\("(.*?)"\)', requests.get(url=link1, allow_redirects=False).text,
+                                       re.S)[0]
+
+                    kuaizao_url = \
+                        html1.xpath(
+                            '//ul[@class="result"]/li[{}]/p[contains(@class,"res-linkinfo")]/a/@href'.format(
+                                i + 1))[0]
+                    kuaizao_html = down2_360(kuaizao_url)
+                    print("360",title, content, detil_url, kuaizao_url)
+                    blacklist_nums = 0
+                    for blacklist_word in blacklist_words:
+                        if blacklist_word not in title:
+                            blacklist_nums += 1
+                    black_urls_nums = 0
+                    for black_url in black_urls:
+                        if black_url not in detil_url:
+                            black_urls_nums += 1
+                    if blacklist_nums == len(blacklist_words) and black_urls_nums == len(black_urls):
+                        url_judge = set_redis(detil_url)
+                        if url_judge == False:
+                            # mysql save
+                            hot = "insert into hxnfo_{}(media_title,poster_picture,play_link,media_source,media_terminal,scrapy_time,media_introduction,scrapy_channel,create_time,update_time,html_info,protable_type,stat_date,keyword_id) values('{}','{}','{}','{}','{}','{}','{}','{}','{}','{}','{}','{}','{}','{}')".format(
+                                table_name,title, kuaizao_url, detil_url, "102", "1", nowTime, content,
+                                "0", nowTime, nowTime, str(base64.b64encode(kuaizao_html.encode("utf-8")),"utf-8"),1,nowTime,keyword_id)
+                            save_mysql(hot)
+                        else:
+                            print("重复数据")
+                            pass
+    except Exception as e:
+        print(e, "&&&&&")
+        pass
